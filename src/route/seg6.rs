@@ -111,8 +111,12 @@ pub enum Seg6Error {
 
 impl std::fmt::Display for Seg6Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self{
-            Seg6Error::InvalidSegmentList => write!(f, "Invalid segment list. A segment list should contain at least one segment."),
+        match self {
+            Seg6Error::InvalidSegmentList => write!(
+                f,
+                "Invalid segment list. A segment list should contain at least \
+                 one segment."
+            ),
         }
     }
 }
