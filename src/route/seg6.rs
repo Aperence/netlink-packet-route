@@ -122,28 +122,6 @@ pub struct Seg6Header {
     pub segments: Vec<Ipv6Addr>,
 }
 
-impl Seg6Header {
-    fn push_segments(buf: &mut [u8], mut segments: Vec<Ipv6Addr>) {
-        if let Some(segment) = segments.pop() {
-            emit_ip_addr(&IpAddr::V6(segment), &mut buf[..SEG6_SEGMENT_LEN]);
-            Self::push_segments(&mut buf[SEG6_SEGMENT_LEN..], segments);
-        }
-    }
-
-    fn get_segments(
-        buf: &[u8],
-        segments: &mut Vec<Ipv6Addr>,
-    ) -> Result<(), DecodeError> {
-        // are there any remaining segments ?
-        if buf.len() >= SEG6_SEGMENT_LEN {
-            let segment = parse_ipv6_addr(&buf[..SEG6_SEGMENT_LEN])?;
-            segments.push(segment);
-            Self::get_segments(&buf[SEG6_SEGMENT_LEN..], segments)?;
-        }
-        Ok(())
-    }
-}
-
 impl Nla for Seg6Header {
     fn value_len(&self) -> usize {
         let segments = match self.mode {
@@ -197,7 +175,14 @@ impl Nla for Seg6Header {
             segments.push("::".parse().expect("Impossible error"))
         }
 
-        Seg6Header::push_segments(&mut buffer[SEG6_HEADER_LEN..], segments);
+        let mut offset = SEG6_HEADER_LEN;
+        for segment in segments.iter().rev() {
+            emit_ip_addr(
+                &IpAddr::V6(*segment),
+                &mut buffer[offset..offset + SEG6_SEGMENT_LEN],
+            );
+            offset += SEG6_SEGMENT_LEN;
+        }
     }
 }
 
@@ -221,7 +206,14 @@ impl<'a, T: AsRef<[u8]> + ?Sized> Parseable<NlaBuffer<&'a T>>
                 })?;
 
                 let mut segments: Vec<Ipv6Addr> = vec![];
-                Seg6Header::get_segments(segments_buf, &mut segments)?;
+                let mut offset = 0;
+                while offset + SEG6_SEGMENT_LEN <= segments_buf.len() {
+                    let segment = parse_ipv6_addr(
+                        &segments_buf[offset..offset + SEG6_SEGMENT_LEN],
+                    )?;
+                    segments.push(segment);
+                    offset += SEG6_SEGMENT_LEN;
+                }
 
                 let mut segments: Vec<Ipv6Addr> =
                     segments.into_iter().rev().collect();
